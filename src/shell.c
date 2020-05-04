@@ -28,11 +28,15 @@ void shell_loop(){
         if(!lexer_debug_mode && !parser_debug_mode){
             printf("%s@shell:%s$ ", dict_get(ENV, "USER"),dict_get(ENV, "PWD"));
         }else{
-        	printf("\n");
+        	printf(">\n");
         }
 
         // Reads in the line
         line  = shell_read_line();
+
+		if(0 != parser_debug_mode && 0 == strcmp(line, "exit")){
+			exit(0);
+		}
 
         // Breaks the line into tokens
         Lexer* lexer = lexer_new(EXE, line);

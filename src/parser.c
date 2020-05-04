@@ -138,8 +138,8 @@ int parser_execute(Dict *ENV, Parser *parser){
 				printf("%s ", parser->commands[i].argv[j]);
 			}
 			printf("\n");
+			continue;
 		}
-
 		if(IF_TRUE == parser->commands[i].type){
 			if(status != 0)
 				return 1;
