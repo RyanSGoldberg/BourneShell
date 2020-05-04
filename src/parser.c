@@ -1,20 +1,23 @@
-#include "parser.h"
-#include <stdlib.h>
-#include "string.h"
-#include "executables.h"
-#include "stdio.h"
-#include "errors.h"
-#include "dict.h"
-
-#include <unistd.h> // Fork and exec
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
+#include "errors.h"
+#include "dict.h"
+#include "executables.h"
+#include "parser.h"
 
-#define MAX_COMPOUND_LENGTH 64
+#define MAX_COMMAND_LENGTH 64
+int parser_debug_mode = 0;
 
 SimpleCommand *simple_command_init(SimpleCommand *simpleCommand, char *command, enum command_type type);
 void simple_command_free(SimpleCommand *command);
+int is_command_seperator(Token *token);
+Token *parser_get_token(Dict *ENV, Lexer *lexer);
+
 
 void parser_parse(Parser *parser, Dict *ENV){
 	enum states {start, command_found, error_found};
@@ -28,12 +31,14 @@ void parser_parse(Parser *parser, Dict *ENV){
 	do{
 		switch(state){
 			case start:
-				token = lexer_get_token(parser->lexer);
+				token = parser_get_token(ENV, parser->lexer);
 
-				if(COMMAND == token->type){
+				//Checks that the STRING is an executable and that its paths isn't in the PWD
+				//TODO FIXME that it checks that the file isnt in PWD
+				if(STRING == token->type && is_executable(parser->lexer->EXE, token->value)){
 					simpleCommand = simple_command_init(parser->commands + parser->num_commands,token->value, type);
 					state = command_found;
-					token = lexer_get_token(parser->lexer);
+					token = parser_get_token(ENV, parser->lexer);
 				}else{
 					// The first token is not a command
 					char temp[256];
@@ -43,7 +48,7 @@ void parser_parse(Parser *parser, Dict *ENV){
 				}
 				break;
 			case command_found:
-				if(AND_IF == token->type || OR_IF == token->type || SEMI == token->type || NEWLINE == token->type){
+				if(is_command_seperator(token)){
 					// Saves the last command
 					if(NULL != simpleCommand){
 						parser->num_commands++;
@@ -68,33 +73,19 @@ void parser_parse(Parser *parser, Dict *ENV){
 
 					state = start;
 				}else{
-					if(0 == strcmp(token->value, "$")){
-						char *key = lexer_get_token(parser->lexer)->value;
-						if(dict_contains(ENV, key)){
-							simpleCommand->argv[simpleCommand->argc] = strdup(dict_get(ENV, key));
-							simpleCommand->argc++;
-						}else{
-							char temp[256];
-							sprintf(temp, "Key %s not found",key);
-							warning(temp);
-							state = error_found;
-						}
-					}else{
-						simpleCommand->argv[simpleCommand->argc] = strdup(token->value);
-						simpleCommand->argc++;
-					}
-
-					token = lexer_get_token(parser->lexer);
+					simpleCommand->argv[simpleCommand->argc] = strdup(token->value);
+					simpleCommand->argc++;
+					token = parser_get_token(ENV, parser->lexer);
 				}
 				break;
 			case error_found:
 				// Find the start of the next command
-				if(AND_IF == token->type || OR_IF == token->type || SEMI == token->type || NEWLINE == token->type){
+				if(is_command_seperator(token)){
 					// Clears the bad SimpleCommand
 					simpleCommand = NULL;
 					state = command_found;
 				}else{
-					token = lexer_get_token(parser->lexer);
+					token = parser_get_token(ENV, parser->lexer);
 				}
 				break;
 		}
@@ -105,11 +96,11 @@ Parser *parser_new(Lexer *lexer){
 	memset(parser, 0, sizeof(Parser));
 
 	parser->lexer = lexer;
-	parser->commands = malloc(sizeof(SimpleCommand)*MAX_COMPOUND_LENGTH);
+	parser->commands = malloc(sizeof(SimpleCommand)*MAX_COMMAND_LENGTH);
 	return parser;
 }
 void parser_free(Parser *parser){
-//	Free the simple commands
+	//	Free the simple commands
 	for(int i = 0; i < parser->num_commands; i++){
 		simple_command_free(parser->commands + i);
 	}
@@ -117,18 +108,38 @@ void parser_free(Parser *parser){
 	free(parser->commands);
 	free(parser);
 }
+Token *parser_get_token(Dict *ENV, Lexer *lexer){
+	Token *token = lexer_get_token(lexer);
+
+	//Do any needed expansions
+	if(0 == strcmp(token->value, "$")){
+		token = lexer_get_token(lexer);
+		char *key = strdup(token->value);
+		free(token->value);
+		if(dict_contains(ENV, key)){
+			token->value = strdup(dict_get(ENV, key));
+		}else{
+			token->value =  strdup("");
+		}
+		free(key);
+	}
+
+	return token;
+}
 int parser_execute(Dict *ENV, Parser *parser){
 
 	int status = 0;
 	for(int i = 0; i < parser->num_commands; i++){
-//		printf("Command: %s\n", parser->commands[i].command);
-//		printf("Type: %d\n", parser->commands[i].type);
-//		printf("Argc: %d\nArgv: ", parser->commands[i].argc);
-//		for(int j = 0; j < parser->commands[i].argc; j++){
-//			printf("%s ", parser->commands[i].argv[j]);
-//		}
-//
-//		printf("\n______________________________\n");
+		if(0 != parser_debug_mode){
+			printf("Command: %s\n", parser->commands[i].command);
+			printf("Type: %d\n", parser->commands[i].type);
+			printf("Argc: %d\nArgv: ", parser->commands[i].argc);
+			for(int j = 0; j < parser->commands[i].argc; j++){
+				printf("%s ", parser->commands[i].argv[j]);
+			}
+			printf("\n");
+		}
+
 		if(IF_TRUE == parser->commands[i].type){
 			if(status != 0)
 				return 1;
@@ -159,14 +170,14 @@ int parser_execute(Dict *ENV, Parser *parser){
 			if(0 == pid){
 				// The child
 
-				int s;
+				char *s;
 				if(NULL != strchr(parser->commands[i].command, '/')){
-					s = execv(parser->commands[i].command,  parser->commands[i].argv);
+					s = parser->commands[i].command;
 				}else{
-					s = execv(dict_get(parser->lexer->EXE, parser->commands[i].command),  parser->commands[i].argv);
+					s = dict_get(parser->lexer->EXE, parser->commands[i].command);
 				}
 
-				if(-1 == s){
+				if(-1 == execv(s, parser->commands[i].argv)){
 					severe("Something has gone wrong! Take a look at your exec");
 				}
 			}else{
@@ -176,6 +187,10 @@ int parser_execute(Dict *ENV, Parser *parser){
 		}
 	}
 	return 0;
+}
+
+int is_command_seperator(Token *token){
+	return AND_IF == token->type || OR_IF == token->type || SEMI == token->type || NEWLINE == token->type;
 }
 
 SimpleCommand *simple_command_init(SimpleCommand *simpleCommand, char *command, enum command_type type){

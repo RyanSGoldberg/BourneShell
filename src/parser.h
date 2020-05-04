@@ -1,3 +1,6 @@
+#ifndef PARSER_SEEN
+#define PARSER_SEEN
+
 #include "lexer.h"
 #include "dict.h"
 
@@ -17,7 +20,10 @@ typedef struct Parser{
 	int num_commands;
 }Parser;
 
+extern int parser_debug_mode;
 Parser *parser_new(Lexer* lexer);
 void parser_parse(Parser *parser, Dict *ENV);
 void parser_free(Parser *parser);
 int parser_execute(Dict *ENV, Parser *parser);
+
+#endif

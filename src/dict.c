@@ -1,7 +1,8 @@
-#include "dict.h"
 #include <string.h>
 #include <stdlib.h>
-#include "stdio.h"
+#include <stdio.h>
+
+#include "dict.h"
 
 #define MAX_BUCKET 64
 #define INITIAL_SIZE 16

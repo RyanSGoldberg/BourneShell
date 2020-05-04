@@ -1,15 +1,17 @@
-#include "lexer.h"
-#include "stdlib.h"
-#include "string.h"
+#include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+
+#include "lexer.h"
 #include "executables.h"
 
-#define NUM_TOKENS 64
+#define MAX_TOKENS 64
 int lexer_debug_mode = 0;
 
 char *str_slice(char *str, int start, int end);
 void token_init(Dict *EXE, Token *t, char *value);
+int isword(char c);
 
 Lexer *lexer_new(Dict *EXE, char *to_tokenize) {
 	Lexer *lexer = malloc(sizeof(Lexer));
@@ -17,14 +19,14 @@ Lexer *lexer_new(Dict *EXE, char *to_tokenize) {
 
 	lexer->curr_token = 0;
 	lexer->EXE = EXE;
-	lexer->tokens = malloc(sizeof(Token) * NUM_TOKENS);
-	memset(lexer->tokens, 0, sizeof(Token) * NUM_TOKENS);
+	lexer->tokens = malloc(sizeof(Token) * MAX_TOKENS);
+	memset(lexer->tokens, 0, sizeof(Token) * MAX_TOKENS);
 	lexer_to_tokens(lexer, to_tokenize);
 	return lexer;
 };
 void lexer_to_tokens(Lexer *lexer, char *source) {
 	enum state {
-		EOS, start, alnum, nalnum, quote, space, token_found
+		EOS, start, word, notword, quote, space, token_found
 	};
 
 	// The current state the lexer is in
@@ -47,10 +49,10 @@ void lexer_to_tokens(Lexer *lexer, char *source) {
 					s++;
 					e++;
 					state = quote;
-				} else if (!isalnum(source[s]) && '-' != source[s] && '/' != source[s]  && '_' != source[s] && '.' != source[s]) {
-					state = nalnum;
+				} else if (!isword(source[s])) {
+					state = notword;
 				} else {
-					state = alnum;
+					state = word;
 				}
 				break;
 			case space:
@@ -68,15 +70,15 @@ void lexer_to_tokens(Lexer *lexer, char *source) {
 					state = token_found;
 				}
 				break;
-			case alnum:
-				if (isalnum(source[e]) || '-' == source[e] || '/' == source[e] || '_' == source[e] || '.' == source[e]) {
+			case word:
+				if (0 != isword(source[e])) {
 					e++;
 				} else {
 					state = token_found;
 				}
 				break;
-			case nalnum:
-				if (!isalnum(source[e]) && '\"' != source[e] && !isspace(source[e]) && '\0' != source[e]) {
+			case notword:
+				if (!isword(source[e]) && '\"' != source[e] && !isspace(source[e]) && '\0' != source[e]) {
 					e++;
 				} else {
 					state = token_found;
@@ -117,7 +119,7 @@ Token *lexer_get_token(Lexer *lexer) {
 	return &lexer->tokens[lexer->curr_token++];
 }
 void lexer_free(Lexer *lexer) {
-	for(int i = 0; i < NUM_TOKENS; i++){
+	for(int i = 0; i < MAX_TOKENS; i++){
 		if(NULL != lexer->tokens[i].value){
 			free(lexer->tokens[i].value);
 		}
@@ -136,19 +138,16 @@ char *str_slice(char *str, int start, int end) {
 	return buffer;
 }
 
+// Returns true iff c is a 'word' type character [a-zA-Z0-9 \- / \.]
+int isword(char c){
+	return isalnum(c) || '-' == c || '/' == c || '_' == c || '.' == c;
+}
+
 void token_init(Dict *EXE,  Token *t, char *value) {
 	t->value = strdup(value);
 
-	//Determines the Token's type
-	if(0 != is_executable(EXE, t->value)){
-		t->type = COMMAND;
-		return;
-	}
-
 	if (0 == strcmp(value, "\n")) {
 		t->type = NEWLINE;
-	} else if (0 == strcmp(value, "=")) {
-		t->type = EQUAL;
 	} else if (0 == strcmp(value, "&&")) {
 		t->type = AND_IF;
 	} else if (0 == strcmp(value, "||")) {
@@ -156,8 +155,6 @@ void token_init(Dict *EXE,  Token *t, char *value) {
 	} else if (0 == strcmp(value, ";")) {
 		t->type = SEMI;
 	} else {
-		t->type = WORD;
+		t->type = STRING;
 	}
 }
-
-//FIXME: UNDERSCORE TOO

@@ -1,6 +1,6 @@
-#include "errors.h"
-#include "stdio.h"
+#include <stdio.h>
 #include <stdlib.h>
+#include "errors.h"
 
 void warning(char *message){
 	fprintf(stderr, "WARNING: %s\n",message);

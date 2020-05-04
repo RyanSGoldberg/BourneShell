@@ -1,12 +1,13 @@
-#include "executables.h"
-#include "stdio.h"
-#include <dirent.h>
+#include <sys/stat.h>
 #include <sys/param.h>
+#include <stdio.h>
+#include <dirent.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h> // chrdir and getcwd
+#include <unistd.h>
+
+#include "executables.h"
 #include "errors.h"
-#include <sys/stat.h>
 
 const int num_builtin_commands = 5;
 const char *builtin_commands[5] = {"exit", "set", "unset", "env", "cd"};

@@ -1,5 +1,5 @@
-#ifndef SHELL_V1_DICT_H
-#define SHELL_V1_DICT_H
+#ifndef DICT_SEEN
+#define DICT_SEEN
 
 typedef struct Dict Dict;
 

@@ -1,7 +1,7 @@
-#include "dict.h"
+#ifndef EXECUTABLES_SEEN
+#define EXECUTABLES_SEEN
 
-#ifndef BUILTINS_SEEN
-#define BUILTINS_SEEN
+#include "dict.h"
 
 const extern char *builtin_commands[];
 const extern int num_builtin_commands;

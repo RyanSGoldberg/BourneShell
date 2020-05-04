@@ -1,7 +1,7 @@
-#ifndef SHELL_V1_ERRORS_H
-#define SHELL_V1_ERRORS_H
+#ifndef ERRORS_SEEN
+#define ERRORS_SEEN
 
 void warning(char *message);
 void severe(char *message);
 
-#endif //SHELL_V1_ERRORS_H
+#endif
