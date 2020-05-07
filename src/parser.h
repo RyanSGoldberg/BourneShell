@@ -11,6 +11,7 @@ typedef struct SimpleCommand{
 	char *command;
 	int argc;
 	char **argv;
+	char **redirects;
 }SimpleCommand;
 
 

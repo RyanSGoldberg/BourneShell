@@ -4,7 +4,7 @@
 #include "dict.h"
 
 
-enum token_type {ZERO, STRING, AND_IF, OR_IF, SEMI, NEWLINE};
+enum token_type {ZERO, STRING, AND_IF, OR_IF, SEMI, NEWLINE, IO_REDIRECT};
 
 typedef struct Token{
     enum token_type type;

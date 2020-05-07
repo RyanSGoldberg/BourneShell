@@ -140,7 +140,7 @@ char *str_slice(char *str, int start, int end) {
 
 // Returns true iff c is a 'word' type character [a-zA-Z0-9 \- / \. _]
 int isword(char c){
-	return isalnum(c) || '-' == c || '/' == c || '_' == c || '.' == c || '~' == c;
+	return isalnum(c) || '-' == c || '/' == c || '_' == c || '.' == c || '~' == c || '>' == c || '<' == c;
 }
 
 void token_init(Dict *EXE,  Token *t, char *value) {
@@ -154,7 +154,9 @@ void token_init(Dict *EXE,  Token *t, char *value) {
 		t->type = OR_IF;
 	} else if (0 == strcmp(value, ";")) {
 		t->type = SEMI;
-	} else {
+	} else if ('<' == value[strlen(value)-1] || '>' == value[strlen(value)-1]) {
+		t->type = IO_REDIRECT;
+	}  else {
 		t->type = STRING;
 	}
 }

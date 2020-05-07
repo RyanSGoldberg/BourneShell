@@ -1,9 +1,11 @@
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <fcntl.h>
 
 #include "errors.h"
 #include "dict.h"
@@ -20,7 +22,7 @@ Token *parser_get_token(Dict *ENV, Lexer *lexer);
 
 
 void parser_parse(Parser *parser, Dict *ENV){
-	enum states {start, command_found, error_found};
+	enum states {start, command_found, error_found, redirect_found};
 
 	Token *token = NULL;
 	enum command_type type = ALL;
@@ -72,6 +74,8 @@ void parser_parse(Parser *parser, Dict *ENV){
 					}
 
 					state = start;
+				}else if(IO_REDIRECT == token->type){
+					state = redirect_found;
 				}else{
 					simpleCommand->argv[simpleCommand->argc] = strdup(token->value);
 					simpleCommand->argc++;
@@ -88,6 +92,34 @@ void parser_parse(Parser *parser, Dict *ENV){
 					token = parser_get_token(ENV, parser->lexer);
 				}
 				break;
+			case redirect_found:{
+				// Determines what is being redirected stdin, stdout, stderr
+				int i = -1;
+				if(0 == strcmp("0>", token->value) || 0 == strcmp("<", token->value)){
+					i = 0;
+				}else if(0 == strcmp("1>", token->value) || 0 == strcmp(">", token->value)){
+					i = 1;
+				}else if(0 == strcmp("2>", token->value)){
+					i = 2;
+				}else{
+					warning("Invalid redirection");
+					state = error_found;
+					continue;
+				}
+				token = parser_get_token(ENV, parser->lexer);
+				if(STRING != token->type){
+					warning("File expected");
+					state = error_found;
+					continue;
+				}
+
+				simpleCommand->redirects[i] = strdup(token->value);
+				token = parser_get_token(ENV, parser->lexer);
+				state = command_found;
+				// Returns to the command found state FIXME
+
+				break;
+			}
 		}
 	}while(NULL != token);
 }
@@ -138,6 +170,11 @@ int parser_execute(Dict *ENV, Parser *parser){
 				printf("%s ", parser->commands[i].argv[j]);
 			}
 			printf("\n");
+			for(int k = 0; k < 3; k++){
+				if(-1 != parser->commands[i].redirects[k]){
+					printf("%d is redirected into %s\n", k, parser->commands[i].redirects[k]);
+				}
+			}
 			continue;
 		}
 		if(IF_TRUE == parser->commands[i].type){
@@ -177,6 +214,25 @@ int parser_execute(Dict *ENV, Parser *parser){
 					s = dict_get(parser->lexer->EXE, parser->commands[i].command);
 				}
 
+				for(int k = 0; k < 3; k++){
+					if(-1 != parser->commands[i].redirects[k]){
+						// Opens the new fid for the new stdin/out/err in ReadWrite and Create if the file doesn't exit
+						// Sets the mode to be read/write by the User
+						int fid = open(parser->commands[i].redirects[k], O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+						if(-1 == fid){
+							char buff[256];
+							sprintf(buff, "%s is an invalid file address", parser->commands[i].redirects[k]);
+							severe(buff);
+						}
+						// Sets the current file id k (0, 1, or 2) to be fid
+						int id = dup2(fid, k);
+						if(-1 == id){
+							severe("Error duplicating the file descriptor");
+						}
+						close(fid);
+					}
+				}
+
 				if(-1 == execv(s, parser->commands[i].argv)){
 					severe("Something has gone wrong! Take a look at your exec");
 				}
@@ -202,6 +258,9 @@ SimpleCommand *simple_command_init(SimpleCommand *simpleCommand, char *command, 
 
 	simpleCommand->argc = 1;
 
+	simpleCommand->redirects = malloc(sizeof(char*)*3);
+	memset(simpleCommand->redirects, -1, (sizeof(char*)*3));
+
 	simpleCommand->type = type;
 	return simpleCommand;
 }
@@ -210,5 +269,14 @@ void simple_command_free(SimpleCommand *simpleCommand){
 	for(int i = 0; i < simpleCommand->argc; i++){
 		free(simpleCommand->argv[i]);
 	}
+
+	for(int k = 0; k < 3; k++){
+		if(-1 != simpleCommand->redirects[k]){
+			free(simpleCommand->redirects[k]);
+		}
+	}
+	free(simpleCommand->redirects);
+
+
 	free(simpleCommand->argv);
 }
