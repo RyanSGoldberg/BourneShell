@@ -39,7 +39,7 @@ void cd(Dict *ENV, char *new_path){
 	}else{
 		// A relative path
 		char temp[512];
-		sprintf(temp, "%s/%s", buf, new_path);
+		sprintf(temp, "%s/%s", dict_get(ENV, "PWD"), new_path);
 		status = chdir(temp);
 		if(-1 == status){
 			warning("cd: No such file or directory");
